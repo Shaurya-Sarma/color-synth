@@ -19,14 +19,14 @@ public struct RippleEvent
     public float maxDistance;
     public float fadeWidth;
 
-    public RippleEvent(Vector3 pos, Color col, float spd = 1.0f, float maxDist = 2.0f, float fade = 0.05f)
+    public RippleEvent(Vector3 position, Color color, float speed, float maxDistance, float fadeWidth)
     {
-        position = pos;
-        color = col;
+        this.position = position;
+        this.color = color;
         startTime = Time.time;
-        speed = spd;
-        maxDistance = maxDist;
-        fadeWidth = fade;
+        this.speed = speed;
+        this.maxDistance = maxDistance;
+        this.fadeWidth = fadeWidth;
     }
 
 }

@@ -1,87 +1,158 @@
 using UnityEngine;
 using System.Collections.Generic;
 
+/// Manages sound-triggered ripples and updates GPU textures for the ripple shader.
+/// Uses a 1D texture per ripple property, allowing multiple ripples simultaneously.
 public class SoundToColorManager : MonoBehaviour
 {
-    public static SoundToColorManager Instance; // singleton instance
-    public FrequencyColorMap frequencyToColor = new FrequencyColorMap(); // custom frequency-color mapping
-    public int maxRipples = 16;
-    public Material rippleMaterial; // ripple shader
+    public static SoundToColorManager Instance;
 
+    [Header("Ripple Settings")]
+    public Material rippleMaterial; // ripple shader material
+    public FrequencyColorMap frequencyToColor = new FrequencyColorMap();
+    public float rippleLifetime = 5f; // how long ripples live before removal
+    private int maxRipples; // maximum number of simultaneous ripples [set in Awake()]
+
+    // Internal storage for ripple events (CPU-side for reference)
     private List<RippleEvent> activeRipples = new();
+
+    // Track which texture index each ripple is stored at
+    private Dictionary<RippleEvent, int> rippleToIndex = new();
+
+    // GPU textures to store ripple data
+    private Texture2D rippleDataTex;    // RGBA: x, y, z, speed
+    private Texture2D rippleTimeTex;    // RGBA: startTime, maxDist, fadeWidth, unused
+    private Texture2D rippleColorTex;   // RGBA: r, g, b, unused
+
+    private int nextRippleIndex = 0;    // circular buffer index
 
     void Awake()
     {
         Instance = this;
+        maxRipples = 100;
+        InitializeTextures();
+        AssignTexturesToMaterialShader();
+    }
+
+    void InitializeTextures()
+    {
+        rippleDataTex = new Texture2D(maxRipples, 1, TextureFormat.RGBAFloat, false);
+        rippleTimeTex = new Texture2D(maxRipples, 1, TextureFormat.RGBAFloat, false);
+        rippleColorTex = new Texture2D(maxRipples, 1, TextureFormat.RGBAFloat, false);
+
+        // Clear all texels
+        for (int i = 0; i < maxRipples; i++)
+        {
+            ClearTextureSlot(i);
+        }
+
+        // finished changing pixels on CPU side -> send to GPU
+        rippleDataTex.Apply(false, false);
+        rippleTimeTex.Apply(false, false);
+        rippleColorTex.Apply(false, false);
+    }
+
+    /// Clears a specific texture slot
+    void ClearTextureSlot(int index)
+    {
+        rippleDataTex.SetPixel(index, 0, Color.clear);
+        rippleTimeTex.SetPixel(index, 0, Color.clear);
+        rippleColorTex.SetPixel(index, 0, Color.clear);
+    }
+
+    /// Assigns textures to the shader material
+    void AssignTexturesToMaterialShader()
+    {
+        rippleMaterial.SetTexture("_RippleDataTex", rippleDataTex);
+        rippleMaterial.SetTexture("_RippleTimeTex", rippleTimeTex);
+        rippleMaterial.SetTexture("_RippleColorTex", rippleColorTex);
+        rippleMaterial.SetFloat("_MaxRipples", (float)maxRipples);
+    }
+
+    /// Emits a new ripple at a position with given volume and frequency 
+    public void EmitSoundEvent(Vector3 pos, float volume, float freqHint)
+    {
+        // Create the ripple data structure
+        Color col = frequencyToColor.evaluate(freqHint);
+        float speed = Mathf.Lerp(0.1f, 0.7f, volume);
+        float maxDist = Mathf.Lerp(0.5f, 2f, volume);
+        float fadeWidth = 0.05f;
+
+        RippleEvent ripple = new RippleEvent(pos, col, speed, maxDist, fadeWidth);
+        activeRipples.Add(ripple);
+
+        Debug.Log("Active Ripples: " + activeRipples.Count);
+
+        // Store the index for this ripple
+        rippleToIndex[ripple] = nextRippleIndex;
+
+        // Keep within limit
+        if (activeRipples.Count > maxRipples)
+        {
+            Debug.LogWarning("Max ripples exceeded, removing oldest ripple." + maxRipples);
+            RippleEvent oldestRipple = activeRipples[0];
+            RemoveRipple(oldestRipple);
+        }
+
+        // Write ripple data to GPU textures
+        WriteRippleToTextures(ripple, nextRippleIndex);
+
+        // Advance index (circular)
+        nextRippleIndex = (nextRippleIndex + 1) % maxRipples;
+    }
+
+    /// Packs the ripple's data into 3 textures and uploads to the GPU.
+    void WriteRippleToTextures(RippleEvent ripple, int index)
+    {
+        // RippleDataTex: position (xyz) + speed
+        rippleDataTex.SetPixel(index, 0,
+            new Color(ripple.position.x, ripple.position.y, ripple.position.z, ripple.speed));
+
+        // RippleTimeTex: startTime, maxDist, fadeWidth
+        rippleTimeTex.SetPixel(index, 0,
+            new Color(ripple.startTime, ripple.maxDistance, ripple.fadeWidth, 0));
+
+        // RippleColorTex: color RGB
+        rippleColorTex.SetPixel(index, 0,
+            new Color(ripple.color.r, ripple.color.g, ripple.color.b, 1));
+
+        // finished changing pixels on CPU side -> send to GPU
+        rippleDataTex.Apply(false, false);
+        rippleTimeTex.Apply(false, false);
+        rippleColorTex.Apply(false, false);
+    }
+
+    /// Removes a ripple and clears its GPU texture slot
+    void RemoveRipple(RippleEvent ripple)
+    {
+        if (rippleToIndex.TryGetValue(ripple, out int index))
+        {
+            // Clear the GPU texture slot
+            ClearTextureSlot(index);
+
+            // Apply changes to GPU
+            rippleDataTex.Apply(false, false);
+            rippleTimeTex.Apply(false, false);
+            rippleColorTex.Apply(false, false);
+
+            // Remove from tracking
+            rippleToIndex.Remove(ripple);
+        }
+
+        activeRipples.Remove(ripple);
     }
 
     void Update()
     {
-        // remove expired ripples 
-        activeRipples.RemoveAll(r => Time.time - r.startTime > 5f);
-        SendDataToShader();
-    }
-
-    public void EmitSoundEvent(Vector3 pos, float volume, float freqHint)
-    {
-        Color col = frequencyToColor.evaluate(freqHint);
-
-        RippleEvent ripple = new RippleEvent(
-            pos: pos,
-            col: col,
-            spd: Mathf.Lerp(.1f, .7f, volume), // speed based on volume
-            maxDist: Mathf.Lerp(.5f, 1f, volume),
-            fade: 0.0f  // edge softness
-        );
-
-        activeRipples.Add(ripple);
-
-        if (activeRipples.Count > maxRipples)
-            activeRipples.RemoveAt(0);
-    }
-
-
-    void SendDataToShader()
-    {
-        if (!rippleMaterial) return;
-
-        if (activeRipples.Count == 0)
+        // Remove ripples older than rippleLifetime seconds
+        // Use a copy to avoid modifying list during iteration
+        var ripplesToRemove = activeRipples.FindAll(r => Time.time - r.startTime > rippleLifetime + 10f);
+        foreach (var ripple in ripplesToRemove)
         {
-            rippleMaterial.SetFloat("_RippleRadius", -1f);
-            return;
+            RemoveRipple(ripple);
         }
 
-        RippleEvent ripple = activeRipples[^1]; // last ripple
-        float elapsedTime = Time.time - ripple.startTime;
-        float currentRadius = elapsedTime * ripple.speed * .825f;
-        Debug.Log("Current Ripple Radius: " + currentRadius);
-
-        // Clamp it to avoid infinite growth
-        float clampedRadius = Mathf.Min(currentRadius, ripple.maxDistance);
-
-        // Fade intensity as it expands
-        float t = Mathf.Clamp01(currentRadius / ripple.maxDistance);
-
-        float fadeoutFactor;
-        if (t < 0.8f)
-        {
-            // stay fully visible until 80%
-            fadeoutFactor = 1f;
-        }
-        else
-        {
-            // linearly fade from 1 → 0 as t goes 0.8 → 1.0
-            fadeoutFactor = Mathf.Lerp(1f, 0f, (t - 0.8f) / 0.2f);
-        }
-
-        rippleMaterial.SetVector("_RippleOrigin", ripple.position);
-        rippleMaterial.SetColor("_RippleColor", ripple.color);
-        rippleMaterial.SetFloat("_RippleRadius", clampedRadius);
-        rippleMaterial.SetFloat("_FadeoutFactor", fadeoutFactor);
-        rippleMaterial.SetFloat("_FadeWidth", ripple.fadeWidth);
-
     }
-
 
     public List<RippleEvent> GetActiveRipples() => activeRipples;
 }
