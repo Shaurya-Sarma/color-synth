@@ -63,11 +63,10 @@ void SampleRipples_float(
 
     int rippleCount = (int)MaxRipples;
 
-    //! Seems like we are locked to 16 max ripples
-
     for (int i = 0; i < rippleCount; i++)
     {
-        float2 uv = float2((i + 0.5) / rippleCount, 0.5);
+        // compute UV to sample ripple data from textures
+        float2 uv = float2((i + 0.5) / rippleCount, 0.5); // gets middle of texel
         
         float4 dataSample = SAMPLE_TEXTURE2D(RippleDataTex, sampler_RippleDataTex, uv);
         float3 ripplePos = dataSample.xyz;
@@ -82,13 +81,13 @@ void SampleRipples_float(
         float3 rippleColor = colorSample.rgb;
 
         float elapsed = time - startTime;
-        if (elapsed < 0) continue;
-        
-        // Skip if this is an empty/cleared ripple slot
-        if (maxDistance <= 0) continue;
 
+        // Skip if this is an empty/cleared ripple slot
+        if (elapsed < 0 || maxDistance <= 0) continue;
+        
+        // Calculate current radius of the ripple -> expands over time 
         float radius = elapsed * speed;
-        radius = min(radius, maxDistance);
+        radius = min(radius, maxDistance); // clamp to maxDistance
 
         // Calculate distance and angle from ripple center
         float2 offset = worldPos.xz - ripplePos.xz;
@@ -105,19 +104,20 @@ void SampleRipples_float(
         float noiseValue = fbm(noiseCoord) - 0.5;
         
         // Perturb the radius with noise for irregular boundary
-        float perturbedRadius = radius + noiseValue * noiseStrength;
-        
+        float smoothedNoise = lerp(0, noiseValue, 0.7); // dampens extremes
+        float perturbedRadius = radius + smoothedNoise * noiseStrength;
+
         // Calculate fade based on distance from perturbed radius
         float fade = 1.0 - smoothstep(perturbedRadius, perturbedRadius + fadeWidth, dist);
         
         // Add fadeout as ripple approaches maxDistance (fade out starting at 80% of maxDistance)
         float fadeoutStart = maxDistance * 0.8;
-        float ageFade = 1.0 - smoothstep(fadeoutStart, maxDistance, radius);
+        float ageFade = 1.0 - smoothstep(fadeoutStart, maxDistance, radius); // when radius reaches fadeOutStart, start fading
+                                                                             // until maxDistance is reached -> then ageFade = 0
         
-        // Combine both fades
-        fade *= ageFade;
-        
-        // CRITICAL: Only add to output if fade is actually visible
+        fade *= ageFade; // will be 0 when ageFade is 0 (i.e. ripple fully faded out)
+         
+        // fade for most pixels will be really small, so only accumulate if significant
         if (fade > 0.001)
         {
             finalColor += rippleColor * fade;
