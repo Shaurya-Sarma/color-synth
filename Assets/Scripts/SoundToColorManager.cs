@@ -71,7 +71,7 @@ public class SoundToColorManager : MonoBehaviour
     /// Emits a new ripple at a position with given volume and frequency 
     public void EmitRipple(RippleEvent ripple)
     {
-        Debug.Log("Active Ripples: " + activeRipples.Count);
+        // Debug.Log("Active Ripples: " + activeRipples.Count);
 
         // Keep within limit
         if (activeRipples.Count >= maxRipples)
@@ -98,9 +98,9 @@ public class SoundToColorManager : MonoBehaviour
         rippleDataTex.SetPixel(index, 0,
             new Color(ripple.position.x, ripple.position.y, ripple.position.z, ripple.speed));
 
-        // RippleTimeTex: startTime, maxDist, fadeWidth
+        // RippleTimeTex: startTime, maxDist, fadeWidth, timbre
         rippleTimeTex.SetPixel(index, 0,
-            new Color(ripple.startTime, ripple.maxDistance, ripple.fadeWidth, 0));
+            new Color(ripple.startTime, ripple.maxDistance, ripple.fadeWidth, ripple.timbre));
 
         // RippleColorTex: color RGB
         rippleColorTex.SetPixel(index, 0,

@@ -11,15 +11,17 @@ public class InteractionInterpreter : MonoBehaviour
     [Header("Ripple Parameters")]
     public float minRippleRadius = 0.1f;
     public float maxRippleRadius = 2f;
-    public float minRippleSpeed = 0.5f;
-    public float maxRippleSpeed = 1f;
+    public float minRippleSpeed = 0.2f;
+    public float maxRippleSpeed = 1.25f;
     public float minFadeWidth = 0.0f;
     public float maxFadeWidth = 0.05f;
+    public float maxEnergyThreshold = 24f; // used to normalize impact energy
     public FrequencyColorMap frequencyToColor = new FrequencyColorMap();
 
     [Header("Volume Scaling")]
     public float minVolume = 0.1f;
     public float maxVolume = 1f;
+    public float pitchVariation = 0.25f;
 
     [Header("Interaction Clips")]
     public string interactionClipsFolder = "Assets/InteractionClips";
@@ -52,7 +54,6 @@ public class InteractionInterpreter : MonoBehaviour
     }
 
     // Select a random clip for the given material type
-    //TODO check if im actually cycling through all clips, bc sometimes it seems like im only using 1 clip
     private InteractionClipSO SelectClip(MaterialType material)
     {
         if (!materialClips.ContainsKey(material) || materialClips[material].Count == 0)
@@ -89,47 +90,57 @@ public class InteractionInterpreter : MonoBehaviour
     // DISCRETE COLLISIONS
     // -----------------------
     public void ProcessDiscreteCollision(
-        Vector3 position,
-        float impactEnergy,
-        float slipSpeed,
-        float spinSpeed,
-        float contactRadius,
-        float bounciness,
-        MaterialType material,
-        float distanceToListener
-    )
+      Vector3 position,
+      float impactEnergy,
+      float slipSpeed,
+      float spinSpeed,
+      float contactRadius,
+      float bounciness,
+      MaterialType material,
+      float distanceToListener
+  )
     {
         InteractionClipSO iclip = SelectClip(material);
         if (iclip == null) return;
 
+        // Normalize impact energy
+        float normalizedEnergy = Mathf.InverseLerp(0f, maxEnergyThreshold, impactEnergy);
+
         // Volume scales with impact energy & distance
-        float volume = Mathf.Clamp(impactEnergy / 10f, minVolume, maxVolume);
+        float volume = Mathf.Lerp(minVolume, maxVolume, normalizedEnergy);
+        // scale volume based on distance to listener (1 = nearby, 0 = far)
         volume *= Mathf.Clamp01(1f - (distanceToListener / 10f));
         if (volume < 0.05f) return; // too quiet → ignore
 
-        // Slight pitch variation based on physics
-        float pitch = iclip.basePitch + Mathf.Clamp(impactEnergy / 10f, -0.1f, 0.1f);
+        // Slight pitch variation based on physics        
+        float pitchOffset = Mathf.Lerp(-pitchVariation, pitchVariation, normalizedEnergy);
+        float colorPitch = iclip.basePitch + pitchOffset; // for ripple color evaluation
+        float audioPitch = 1f + pitchOffset;             // for actual audio playback
 
         // Estimate timbre for ripple noise scale (rough heuristic by material type) 
-        //TODO load timbre value into SoundToColorManager and use in shader
-        //TODO have more timber (more jagged-glassy) equal to more noisy ripples 
-        //TODO  (e.g., wood = smoother ripples, glass = more noisy ripples)
+        /// have more timber (more jagged-glassy) equal to more noisy ripples 
+        //(e.g., wood = smoother ripples, glass = more noisy ripples)
         float timbre = EstimateTimbre(material, slipSpeed, spinSpeed);
+        float timbreNoiseScale = Mathf.Lerp(0.1f, 2.5f, timbre);
 
         // Construct ripple event
-        Color color = frequencyToColor.evaluate(pitch);
-        float speed = Mathf.Lerp(minRippleSpeed, maxRippleSpeed, impactEnergy / 10f);
-        float maxDist = Mathf.Lerp(0.5f, 2f, volume);
+        Color color = frequencyToColor.evaluate(colorPitch);
+        float speed = Mathf.Lerp(minRippleSpeed, maxRippleSpeed, normalizedEnergy);
+        float maxDist = Mathf.Lerp(minRippleRadius, maxRippleRadius, normalizedEnergy);
         float fadeWidth = 0f;
 
-        RippleEvent ripple = new RippleEvent(position, color, speed, maxDist, fadeWidth, timbre, continuous: false);
+        RippleEvent ripple = new RippleEvent(position, color, speed, maxDist, fadeWidth, timbreNoiseScale, continuous: false);
 
-        // Emit to SoundToColorManager
-        Debug.Log("Emitting Ripple: with speed=" + speed + " maxDist=" + maxDist + " fadeWidth=" + fadeWidth + " energy=" + impactEnergy);
+        // Emit to SoundToColorManager        
         SoundToColorManager.Instance.EmitRipple(ripple);
         // Call AudioManager to play sound
-        AudioManager.Instance.PlayClip(iclip.clip, position, volume);
+        AudioManager.Instance.PlayClip(iclip.clip, position, volume, audioPitch);
+
+        Debug.Log("Processed discrete collision: " +
+            $"Material={material}, Energy={impactEnergy:F2}, Volume={volume:F2}, Pitch={audioPitch:F2}, " +
+            $"Timbre={timbreNoiseScale:F2}, RippleSpeed={speed:F2}, MaxDist={maxDist:F2}");
     }
+
 
     // -----------------------
     // CONTINUOUS COLLISIONS
@@ -177,8 +188,7 @@ public class InteractionInterpreter : MonoBehaviour
             MaterialType.Plastic => 0.3f,
             _ => 0.5f
         };
-
-        // scale by physics dynamics
-        return Mathf.Clamp01(baseTimbre + (velocity + spinSpeed) / 20f);
+        ;
+        return baseTimbre;
     }
 }

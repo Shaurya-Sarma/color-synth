@@ -1631,7 +1631,7 @@
     "m_Hidden": false,
     "m_ShaderOutputName": "noiseStrength",
     "m_StageCapability": 3,
-    "m_Value": 0.25,
+    "m_Value": 0.12999999523162843,
     "m_DefaultValue": 0.0,
     "m_Labels": []
 }
@@ -2009,9 +2009,6 @@
         },
         {
             "m_Id": "2eac12adc1474a33b56b887fc1923f04"
-        },
-        {
-            "m_Id": "a9beb05ce3d04906889b6dc3513a562c"
         },
         {
             "m_Id": "4bb969c6804b42bba2c7c1273ca3ae3b"
@@ -3300,21 +3297,6 @@
     "m_EnumValues": [
         0
     ]
-}
-
-{
-    "m_SGVersion": 0,
-    "m_Type": "UnityEditor.ShaderGraph.Vector1MaterialSlot",
-    "m_ObjectId": "a9beb05ce3d04906889b6dc3513a562c",
-    "m_Id": 8,
-    "m_DisplayName": "noiseScale",
-    "m_SlotType": 0,
-    "m_Hidden": false,
-    "m_ShaderOutputName": "noiseScale",
-    "m_StageCapability": 3,
-    "m_Value": 2.990000009536743,
-    "m_DefaultValue": 0.0,
-    "m_Labels": []
 }
 
 {

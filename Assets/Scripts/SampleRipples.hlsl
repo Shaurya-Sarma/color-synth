@@ -52,7 +52,6 @@ void SampleRipples_float(
     UnityTexture2D RippleDataTex,
     UnityTexture2D RippleTimeTex,
     UnityTexture2D RippleColorTex,
-    float noiseScale,
     float noiseStrength,
     out float3 outColor,
     out float outAlpha
@@ -76,6 +75,7 @@ void SampleRipples_float(
         float startTime = timeSample.r;
         float maxDistance = timeSample.g;
         float fadeWidth = timeSample.b;
+        float noiseScale = timeSample.a; 
         
         float4 colorSample = SAMPLE_TEXTURE2D(RippleColorTex, sampler_RippleColorTex, uv);
         float3 rippleColor = colorSample.rgb;
