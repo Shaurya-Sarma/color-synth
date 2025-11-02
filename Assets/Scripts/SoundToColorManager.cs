@@ -9,7 +9,6 @@ public class SoundToColorManager : MonoBehaviour
 
     [Header("Ripple Settings")]
     public Material rippleMaterial; // ripple shader material
-    public FrequencyColorMap frequencyToColor = new FrequencyColorMap();
     public float rippleLifetime = 5f; // how long ripples live before removal
     private int maxRipples; // maximum number of simultaneous ripples [set in Awake()]
 
@@ -70,29 +69,20 @@ public class SoundToColorManager : MonoBehaviour
     }
 
     /// Emits a new ripple at a position with given volume and frequency 
-    public void EmitSoundEvent(Vector3 pos, float volume, float freqHint)
+    public void EmitRipple(RippleEvent ripple)
     {
-        // Create the ripple data structure
-        Color col = frequencyToColor.evaluate(freqHint);
-        float speed = Mathf.Lerp(0.1f, 0.7f, volume);
-        float maxDist = Mathf.Lerp(0.5f, 2f, volume);
-        float fadeWidth = 0.05f;
-
-        RippleEvent ripple = new RippleEvent(pos, col, speed, maxDist, fadeWidth);
-        activeRipples.Add(ripple);
-
         Debug.Log("Active Ripples: " + activeRipples.Count);
 
-        // Store the index for this ripple
-        rippleToIndex[ripple] = nextRippleIndex;
-
         // Keep within limit
-        if (activeRipples.Count > maxRipples)
+        if (activeRipples.Count >= maxRipples)
         {
             Debug.LogWarning("Max ripples exceeded, removing oldest ripple." + maxRipples);
             RippleEvent oldestRipple = activeRipples[0];
             RemoveRipple(oldestRipple);
         }
+
+        activeRipples.Add(ripple);
+        rippleToIndex[ripple] = nextRippleIndex;
 
         // Write ripple data to GPU textures
         WriteRippleToTextures(ripple, nextRippleIndex);

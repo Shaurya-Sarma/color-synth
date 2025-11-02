@@ -9,6 +9,8 @@ using UnityEngine;
 // speed: speed of the ripple expansion (growth of ripple)
 // maxDistance: maximum distance the ripple travels before fully fading out
 // fadeWidth: controls the softness/thickness of the ripple edge
+// timbre: additional parameter to influence ripple appearance (e.g., noise scale)
+// continuous: whether the ripple is from a continuous source (sliding) or discrete (impact
 
 public struct RippleEvent
 {
@@ -18,8 +20,10 @@ public struct RippleEvent
     public float speed;
     public float maxDistance;
     public float fadeWidth;
+    public float timbre;
+    public bool continuous;
 
-    public RippleEvent(Vector3 position, Color color, float speed, float maxDistance, float fadeWidth)
+    public RippleEvent(Vector3 position, Color color, float speed, float maxDistance, float fadeWidth, float timbre, bool continuous = false)
     {
         this.position = position;
         this.color = color;
@@ -27,6 +31,8 @@ public struct RippleEvent
         this.speed = speed;
         this.maxDistance = maxDistance;
         this.fadeWidth = fadeWidth;
+        this.timbre = timbre;
+        this.continuous = continuous;
     }
 
 }

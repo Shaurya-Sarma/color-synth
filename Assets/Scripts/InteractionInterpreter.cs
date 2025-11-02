@@ -1,36 +1,89 @@
 using UnityEngine;
+using System.Collections.Generic;
+#if UNITY_EDITOR
+using UnityEditor;
+#endif
 
-/// Singleton that receives all interaction events (discrete vs continuous)
-/// and translates them into audio + ripple events with appropriately
-/// adjusted parameters to create procedural sound and visual effects.
 public class InteractionInterpreter : MonoBehaviour
 {
     public static InteractionInterpreter Instance;
-
-    [Header("Audio Clips by Material")]
-    public AudioClip[] glassHitClips;
-    public AudioClip[] metalHitClips;
-    public AudioClip[] woodHitClips;
-    public AudioClip[] clothHitClips;
-    public AudioClip[] plasticHitClips;
 
     [Header("Ripple Parameters")]
     public float minRippleRadius = 0.1f;
     public float maxRippleRadius = 2f;
     public float minRippleSpeed = 0.5f;
-    public float maxRippleSpeed = 3f;
-    public float minFadeWidth = 0.2f;
-    public float maxFadeWidth = 1f;
+    public float maxRippleSpeed = 1f;
+    public float minFadeWidth = 0.0f;
+    public float maxFadeWidth = 0.05f;
+    public FrequencyColorMap frequencyToColor = new FrequencyColorMap();
 
     [Header("Volume Scaling")]
     public float minVolume = 0.1f;
     public float maxVolume = 1f;
 
+    [Header("Interaction Clips")]
+    public string interactionClipsFolder = "Assets/InteractionClips";
+    public List<InteractionClipSO> interactionClips;
+
+    private Dictionary<MaterialType, List<InteractionClipSO>> materialClips = new();
+
     void Awake()
     {
-        if (Instance != null) Destroy(this);
-        else Instance = this;
+        if (Instance != null)
+        {
+            Destroy(gameObject);
+            return;
+        }
+        Instance = this;
+        DontDestroyOnLoad(gameObject);
+
+        LoadMaterialClips();
     }
+
+    private void LoadMaterialClips()
+    {
+        materialClips.Clear();
+        foreach (var iclip in interactionClips)
+        {
+            if (!materialClips.ContainsKey(iclip.materialType))
+                materialClips[iclip.materialType] = new List<InteractionClipSO>();
+            materialClips[iclip.materialType].Add(iclip);
+        }
+    }
+
+    // Select a random clip for the given material type
+    //TODO check if im actually cycling through all clips, bc sometimes it seems like im only using 1 clip
+    private InteractionClipSO SelectClip(MaterialType material)
+    {
+        if (!materialClips.ContainsKey(material) || materialClips[material].Count == 0)
+            return null;
+        var clips = materialClips[material];
+        return clips[Random.Range(0, clips.Count)];
+    }
+
+#if UNITY_EDITOR
+    // Button in inspector to auto-load all InteractionClipSO assets
+    [ContextMenu("Auto-Load All InteractionClips")]
+    public void AutoLoadInteractionClips()
+    {
+        interactionClips.Clear();
+
+        string[] guids = AssetDatabase.FindAssets("t:InteractionClipSO", new[] { interactionClipsFolder });
+
+        foreach (string guid in guids)
+        {
+            string path = AssetDatabase.GUIDToAssetPath(guid);
+            InteractionClipSO clip = AssetDatabase.LoadAssetAtPath<InteractionClipSO>(path);
+            if (clip != null)
+            {
+                interactionClips.Add(clip);
+            }
+        }
+
+        EditorUtility.SetDirty(this);
+        Debug.Log($"<color=green>Auto-loaded {interactionClips.Count} InteractionClipSO assets from {interactionClipsFolder}</color>");
+    }
+#endif
 
     // -----------------------
     // DISCRETE COLLISIONS
@@ -46,74 +99,86 @@ public class InteractionInterpreter : MonoBehaviour
         float distanceToListener
     )
     {
-        AudioClip clip = SelectClip(material);
+        InteractionClipSO iclip = SelectClip(material);
+        if (iclip == null) return;
 
         // Volume scales with impact energy & distance
         float volume = Mathf.Clamp(impactEnergy / 10f, minVolume, maxVolume);
-        volume *= Mathf.Clamp01(1f - (distanceToListener / 10f)); //TODO have it so that too far away is silent and therefore not generating ripples
+        volume *= Mathf.Clamp01(1f - (distanceToListener / 10f));
+        if (volume < 0.05f) return; // too quiet → ignore
 
-        // Ripple parameters
-        float rippleRadius = Mathf.Lerp(minRippleRadius, maxRippleRadius, impactEnergy / 10f);
-        float rippleSpeed = Mathf.Lerp(minRippleSpeed, maxRippleSpeed, impactEnergy / 10f);
-        float fadeWidth = Mathf.Lerp(minFadeWidth, maxFadeWidth, slipSpeed + spinSpeed);
+        // Slight pitch variation based on physics
+        float pitch = iclip.basePitch + Mathf.Clamp(impactEnergy / 10f, -0.1f, 0.1f);
 
-        // Construct ripple event (color handled by manager)
-        // TODO let this script handle color as well (need the frequency color map)
-        RippleEvent ripple = new RippleEvent(position, Color.white, rippleSpeed, rippleRadius, fadeWidth);
+        // Estimate timbre for ripple noise scale (rough heuristic by material type) 
+        //TODO load timbre value into SoundToColorManager and use in shader
+        //TODO have more timber (more jagged-glassy) equal to more noisy ripples 
+        //TODO  (e.g., wood = smoother ripples, glass = more noisy ripples)
+        float timbre = EstimateTimbre(material, slipSpeed, spinSpeed);
+
+        // Construct ripple event
+        Color color = frequencyToColor.evaluate(pitch);
+        float speed = Mathf.Lerp(minRippleSpeed, maxRippleSpeed, impactEnergy / 10f);
+        float maxDist = Mathf.Lerp(0.5f, 2f, volume);
+        float fadeWidth = 0f;
+
+        RippleEvent ripple = new RippleEvent(position, color, speed, maxDist, fadeWidth, timbre, continuous: false);
 
         // Emit to SoundToColorManager
-        // SoundToColorManager.Instance.EmitSoundEvent(ripple, clip, volume);
+        Debug.Log("Emitting Ripple: with speed=" + speed + " maxDist=" + maxDist + " fadeWidth=" + fadeWidth + " energy=" + impactEnergy);
+        SoundToColorManager.Instance.EmitRipple(ripple);
+        // Call AudioManager to play sound
+        AudioManager.Instance.PlayClip(iclip.clip, position, volume);
     }
 
     // -----------------------
     // CONTINUOUS COLLISIONS
     // -----------------------
-    public void ProcessContinuousCollisions(
+    public void ProcessContinuousCollision(
         Vector3 position,
         float velocity,
         float angularVelocity,
         MaterialType material
     )
     {
-        // AudioClip clip = SelectClip(material);
+        InteractionClipSO iclip = SelectClip(material);
+        if (iclip == null) return;
 
         // float volume = Mathf.Clamp(velocity / 5f, minVolume, maxVolume);
-        // float rippleRadius = Mathf.Lerp(minRippleRadius, maxRippleRadius, velocity / 5f);
-        // float rippleSpeed = Mathf.Lerp(minRippleSpeed, maxRippleSpeed, velocity / 5f);
-        // float fadeWidth = Mathf.Lerp(minFadeWidth, maxFadeWidth, angularVelocity / 10f);
+        // if (volume < 0.05f) return;
 
-        // RippleEvent ripple = new RippleEvent(position, Color.white, rippleSpeed, rippleRadius, fadeWidth);
+        // float pitch = iclip.basePitch + Mathf.Clamp(velocity / 10f, -0.1f, 0.1f);
+        // float timbre = EstimateTimbre(material, velocity, angularVelocity);
 
-        // Emit as continuous
-        // SoundToColorManager.Instance.EmitRipple(ripple, clip, volume, continuous: true);
+        // // Construct ripple event
+        // Color color = frequencyToColor.evaluate(pitch);
+        // float speed = Mathf.Lerp(minRippleSpeed, maxRippleSpeed, impactEnergy / 10f);
+        // float maxDist = Mathf.Lerp(0.5f, 2f, volume);
+        // float fadeWidth = Mathf.Lerp(minFadeWidth, maxFadeWidth, slipSpeed + spinSpeed);
+
+        // RippleEvent ripple = new RippleEvent(position, color, speed, maxDist, fadeWidth, timbre, continuous: false);
+
+        // SoundToColorManager.Instance.EmitRipple(ripple);
+        // AudioManager.Instance.PlayClip(iclip.clip, position, volume, pitch);
     }
 
-
-    // select an audio clip based on material type
-    // TODO could add layered randomization (e.g. pitch variation) for proceduralism
-    private AudioClip SelectClip(MaterialType material)
+    // -----------------------
+    // TIMBRE HEURISTIC
+    // -----------------------
+    private float EstimateTimbre(MaterialType material, float velocity, float spinSpeed)
     {
-        AudioClip[] clips = material switch
+        // rough example: metallic/glass = jagged (high noise), wood = smoother
+        float baseTimbre = material switch
         {
-            MaterialType.Glass => glassHitClips,
-            MaterialType.Metal => metalHitClips,
-            MaterialType.Wood => woodHitClips,
-            MaterialType.Cloth => clothHitClips,
-            MaterialType.Plastic => plasticHitClips,
-            _ => woodHitClips
+            MaterialType.Glass => 0.9f,
+            MaterialType.Metal => 0.8f,
+            MaterialType.Wood => 0.4f,
+            MaterialType.Cloth => 0.2f,
+            MaterialType.Plastic => 0.3f,
+            _ => 0.5f
         };
 
-        if (clips == null || clips.Length == 0) return null;
-        return clips[Random.Range(0, clips.Length)];
+        // scale by physics dynamics
+        return Mathf.Clamp01(baseTimbre + (velocity + spinSpeed) / 20f);
     }
-
-    // TODO implmement method for unique interactions with increased priority to basically override generic physics-based ones
-    // e.g. user touches object, special scripted event, etc.
-
-    // TODO maintain a priority queue of interaction events to process in order of importance
-    // throw out low-priority events if too many are queued up
-    // cell-based spatial partitioning to avoid overlapping ripples from nearby interactions -> divide scene into grid of cells and limit to one ripple per cell per frame?
-    // using priority queue, send ripple events to SoundToColorManager in order of priority
-    // all ripple information should be calculated within this file, SoundToColorManager just handles sending to GPU
-
 }

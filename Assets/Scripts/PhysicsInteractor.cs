@@ -1,7 +1,5 @@
 using UnityEngine;
 
-// give every object a material type to slightly alter sound/ripple characteristics 
-// (e.g., glass sounds sharper, cloth more muffled, etc.)
 public enum MaterialType
 {
     Glass,
@@ -11,100 +9,97 @@ public enum MaterialType
     Plastic
 }
 
-// handles physics-based interactions to generate sound and ripple effects
-// passes interaction data to InteractionInterpreter for further processing
+// attach to any object with Rigidbody to enable physics-based interaction ripples
+// detects collisions and continuous movement to send interaction data to InteractionInterpreter
+// setKinematic = true to prevent object from being affected by physics
 
 [RequireComponent(typeof(Rigidbody))]
 public class PhysicsInteractor : MonoBehaviour
 {
     [Header("Thresholds")]
-    public float minEnergyThreshold = 1f;  // minimum impact energy to register a discrete interaction
-    public float minContinuousVelocity = 0.1f;  // minimum velocity to register continuous interaction
+    public float minEnergyThreshold = 1f;
+    public float minContinuousVelocity = 0.1f;
 
     [Header("Material Settings")]
-    public MaterialType materialType = MaterialType.Wood; // object material type
+    public MaterialType materialType = MaterialType.Wood;
+
+    [Header("Physics Settings")]
+
     private Rigidbody rb;
+
     void Awake()
     {
         rb = GetComponent<Rigidbody>();
     }
 
-    // -------------------
-    // DISCRETE INTERACTIONS
-    // -------------------
+
+    //! Find a solution to "fix" duplicate collision events between two objects? maybe allow this?
+    //! when a non-kinematic object moves then the ripple usually never actually colors the original object 
+    //! because the ripple shader uses world position and the object has moved away from the impact point
 
     private void OnCollisionEnter(Collision collision)
     {
+        if (InteractionInterpreter.Instance == null) return;
+        if (this.gameObject.CompareTag("IgnoreRipple")) return; // optional tag to skip ripple generation
+
+        // Get other rigidbody
         Rigidbody otherRb = collision.rigidbody;
 
-        // effective mass for energy calculation
-        float effectiveMass = rb.mass * (otherRb != null ? otherRb.mass : rb.mass) /
-                              (rb.mass + (otherRb != null ? otherRb.mass : rb.mass));
+        // Calculate effective mass
+        float myMass = rb.mass;
+        float otherMass = otherRb != null ? otherRb.mass : myMass;
+        float effectiveMass = myMass * otherMass / (myMass + otherMass);
 
-        // impact energy as proxy for loudness / ripple size
+        // Impact calculations
         float impactSpeed = collision.relativeVelocity.magnitude;
         float impactEnergy = 0.5f * effectiveMass * impactSpeed * impactSpeed;
 
-        if (impactEnergy < minEnergyThreshold) return; // ignore insignificant collisions
+        if (impactEnergy < minEnergyThreshold) return;
 
-        // Contact point & normal
+        // Contact info
         ContactPoint contact = collision.contacts[0];
         Vector3 contactPoint = contact.point;
         Vector3 contactNormal = contact.normal;
 
-        // Approximate contact area
+        // Contact radius
         Collider col = collision.collider;
-        float contactRadius = 0.1f; // default
-        if (col is SphereCollider sphere) contactRadius = sphere.radius;
-        else if (col is BoxCollider box) contactRadius = box.size.magnitude * 0.25f;
+        float contactRadius = col switch
+        {
+            SphereCollider sphere => sphere.radius,
+            BoxCollider box => box.size.magnitude * 0.25f,
+            CapsuleCollider capsule => capsule.radius,
+            _ => 0.1f
+        };
 
-        // Restitution / bounciness
+        // Physics details
         float bounciness = col.material != null ? col.material.bounciness : 0f;
-
-        // Tangential/slip velocity
         Vector3 tangentialVel = Vector3.ProjectOnPlane(rb.linearVelocity, contactNormal);
         float slipSpeed = tangentialVel.magnitude;
-
-        // Angular velocity
         float spinSpeed = rb.angularVelocity.magnitude;
+        float distanceToListener = Camera.main != null ?
+            Vector3.Distance(contactPoint, Camera.main.transform.position) : 10f;
 
-        // Distance to listener (camera)
-        float distanceToListener = Vector3.Distance(contactPoint, Camera.main.transform.position);
+        Debug.Log($"Collision with impactEnergy={impactEnergy} by object={this.gameObject.name}");
 
-        // send event to InteractionInterpreter
-        //! Give physics interaction with priority -1 to ensure unique 
-        //! interactions are processed before generic physics-based ones.
-        // InteractionInterpreter.Instance.ProcessDiscreteInteraction(
-        //     position: contactPoint,
-        //     impactEnergy: impactEnergy,
-        //     slipSpeed: slipSpeed,
-        //     spinSpeed: spinSpeed,
-        //     contactRadius: contactRadius,
-        //     bounciness: bounciness,
-        //     material: materialType,
-        //     distanceToListener: distanceToListener,
-        //     otherObject: collision.gameObject
-        // );
+        // Send to interpreter
+        InteractionInterpreter.Instance.ProcessDiscreteCollision(
+            position: contactPoint,
+            impactEnergy: impactEnergy,
+            slipSpeed: slipSpeed,
+            spinSpeed: spinSpeed,
+            contactRadius: contactRadius,
+            bounciness: bounciness,
+            material: materialType,
+            distanceToListener: distanceToListener
+        );
     }
 
-    // -------------------
-    // CONTINUOUS INTERACTIONS
-    // -------------------
     void Update()
     {
-        float speed = rb.linearVelocity.magnitude;
 
-        if (speed < minContinuousVelocity) return;
+        // float speed = rb.linearVelocity.magnitude;
+        // if (speed < minContinuousVelocity) return;
 
-        // Continuous event: e.g., rolling, sliding
-        // InteractionInterpreter.Instance.ProcessContinuousInteraction(
-        //     position: transform.position,
-        //     velocity: speed,
-        //     angularVelocity: rb.angularVelocity.magnitude,
-        //     material: materialType,
-        //     objectRef: gameObject
-        // );
+        // Continuous interaction handling here if needed
     }
 }
-
-

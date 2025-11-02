@@ -1631,7 +1631,7 @@
     "m_Hidden": false,
     "m_ShaderOutputName": "noiseStrength",
     "m_StageCapability": 3,
-    "m_Value": 0.12999999523162843,
+    "m_Value": 0.25,
     "m_DefaultValue": 0.0,
     "m_Labels": []
 }
@@ -3312,7 +3312,7 @@
     "m_Hidden": false,
     "m_ShaderOutputName": "noiseScale",
     "m_StageCapability": 3,
-    "m_Value": 1.7300000190734864,
+    "m_Value": 2.990000009536743,
     "m_DefaultValue": 0.0,
     "m_Labels": []
 }
