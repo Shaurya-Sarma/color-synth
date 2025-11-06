@@ -1,47 +1,61 @@
 #ifndef SAMPLE_RIPPLES_INCLUDED
 #define SAMPLE_RIPPLES_INCLUDED
 
-// Simple hash function for noise
-float hash(float2 p)
+float2 fade(float2 t) { return t * t * t * (t * (t * 6.0 - 15.0) + 10.0); }
+
+float grad2(float2 p, float2 ip, float2 fp)
 {
-    p = frac(p * float2(123.34, 456.21));
-    p += dot(p, p + 45.32);
-    return frac(p.x * p.y);
+    float2 u = float2(12.9898, 78.233);
+    float a = dot(p, u);
+    return frac(sin(a) * 43758.5453);
 }
 
-// 2D value noise for organic boundaries
-float noise(float2 p)
+float perlinNoise(float2 p)
 {
     float2 i = floor(p);
     float2 f = frac(p);
-    
-    // Smooth interpolation
-    f = f * f * (3.0 - 2.0 * f);
-    
-    // Four corners of the cell
-    float a = hash(i);
-    float b = hash(i + float2(1.0, 0.0));
-    float c = hash(i + float2(0.0, 1.0));
-    float d = hash(i + float2(1.0, 1.0));
-    
-    // Bilinear interpolation
-    return lerp(lerp(a, b, f.x), lerp(c, d, f.x), f.y);
+
+    float2 u = fade(f);
+
+    float a = grad2(i + float2(0.0, 0.0), i, f);
+    float b = grad2(i + float2(1.0, 0.0), i, f);
+    float c = grad2(i + float2(0.0, 1.0), i, f);
+    float d = grad2(i + float2(1.0, 1.0), i, f);
+
+    return lerp(lerp(a, b, u.x), lerp(c, d, u.x), u.y);
 }
+
+
 
 // Fractal/layered noise for more organic look
 float fbm(float2 p)
 {
     float value = 0.0;
     float amplitude = 0.5;
-    
+
     for (int i = 0; i < 3; i++)
     {
-        value += amplitude * noise(p);
+        value += amplitude * perlinNoise(p);
         p *= 2.0;
         amplitude *= 0.5;
     }
-    
+
     return value;
+}
+
+float warpyNoise(float2 p, float time)
+{
+    float2 q = float2(
+        fbm(p + float2(0.0, 0.0) + time * 0.05),
+        fbm(p + float2(5.2, 1.3) + time * 0.05)
+    );
+    
+    float2 r = float2(
+        fbm(p + 1.2*q + float2(1.7, 9.2)),
+        fbm(p + 1.2*q + float2(8.3, 2.8))
+    );
+    
+    return fbm(p + 0.8*r);
 }
 
 // Sample multiple ripples from textures
@@ -94,21 +108,26 @@ void SampleRipples_float(
         float dist = length(offset);
         float angle = atan2(offset.y, offset.x);
         
-        // Create noise coordinate based on angle for circular variation
-        float2 noiseCoord = float2(angle * 3.0, dist * 0.5) * noiseScale;
-        
-        // Add ripple-specific seed to make each ripple unique
-        noiseCoord += float2(i * 123.456, i * 789.012);
-        
-        // Get organic noise value (0 to 1 range, centered at 0.5)
-        float noiseValue = fbm(noiseCoord) - 0.5;
-        
-        // Perturb the radius with noise for irregular boundary
-        float smoothedNoise = lerp(0, noiseValue, 0.7); // dampens extremes
-        float perturbedRadius = radius + smoothedNoise * noiseStrength;
+       // --- Noise layering for complex edge breakup ---
+        float2 dir = float2(cos(angle), sin(angle));
+        float2 coord = dir * dist * 3.0;
 
-        // Calculate fade based on distance from perturbed radius
-        float fade = 1.0 - smoothstep(perturbedRadius, perturbedRadius + fadeWidth, dist);
+        // Two noise layers: large smooth + fine detail
+        float n1 = warpyNoise(coord * 1.5 + time * 0.1, time);
+        float n2 = warpyNoise(coord * 8.0 - time * 0.3, time);
+        float n = n1 * 0.6 + n2 * 0.4;
+
+        // Modulate radius with noise
+        float perturbedRadius = radius + (n - 0.5) * .32;
+
+        // --- Edge shaping ---
+        float fade = 1.0 - smoothstep(perturbedRadius, perturbedRadius + fadeWidth * 0.5, dist);
+        fade = pow(fade, 1.6); // sharpen contrast
+
+        // --- Glow falloff ---
+        float glowDist = abs(dist - perturbedRadius);     // distance from ripple edge
+        float glow = exp(-glowDist * 15.0);               // exponential falloff
+        glow *= fade * 1.5;                               // tie to ripple strength
         
         // Add fadeout as ripple approaches maxDistance (fade out starting at 80% of maxDistance)
         float fadeoutStart = maxDistance * 0.8;
@@ -116,12 +135,14 @@ void SampleRipples_float(
                                                                              // until maxDistance is reached -> then ageFade = 0
         
         fade *= ageFade; // will be 0 when ageFade is 0 (i.e. ripple fully faded out)
+        glow *= ageFade;
          
         // fade for most pixels will be really small, so only accumulate if significant
         if (fade > 0.001)
         {
-            finalColor += rippleColor * fade;
-            finalAlpha += fade;
+            float3 glowColor = rippleColor * glow;        // brighter, emissive edge
+            finalColor += rippleColor * fade + glowColor; // add both layers
+            finalAlpha += fade + glow * 0.5;
         }
     }
 

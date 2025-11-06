@@ -121,7 +121,7 @@ public class InteractionInterpreter : MonoBehaviour
         /// have more timber (more jagged-glassy) equal to more noisy ripples 
         //(e.g., wood = smoother ripples, glass = more noisy ripples)
         float timbre = EstimateTimbre(material, slipSpeed, spinSpeed);
-        float timbreNoiseScale = Mathf.Lerp(0.1f, 2.5f, timbre);
+        float timbreNoiseScale = Mathf.Lerp(2f, 4f, timbre);
 
         // Construct ripple event
         Color color = frequencyToColor.evaluate(colorPitch);
