@@ -9,10 +9,6 @@ public enum MaterialType
     Plastic
 }
 
-// attach to any object with Rigidbody to enable physics-based interaction ripples
-// detects collisions and continuous movement to send interaction data to InteractionInterpreter
-// setKinematic = true to prevent object from being affected by physics
-
 [RequireComponent(typeof(Rigidbody))]
 public class PhysicsInteractor : MonoBehaviour
 {
@@ -23,45 +19,89 @@ public class PhysicsInteractor : MonoBehaviour
     [Header("Material Settings")]
     public MaterialType materialType = MaterialType.Wood;
 
-    [Header("Physics Settings")]
+    [Header("Ripple Settings")]
+    public float rippleCooldown = 0.1f; // seconds between allowed ripples
 
     private Rigidbody rb;
+    private float lastRippleTime = -999f; // track last ripple emission
 
     void Awake()
     {
         rb = GetComponent<Rigidbody>();
     }
 
-
-    //! Find a solution to "fix" duplicate collision events between two objects? maybe allow this?
-    //! when a non-kinematic object moves then the ripple usually never actually colors the original object 
-    //! because the ripple shader uses world position and the object has moved away from the impact point
-
     private void OnCollisionEnter(Collision collision)
     {
         if (InteractionInterpreter.Instance == null) return;
-        if (this.gameObject.CompareTag("IgnoreRipple")) return; // optional tag to skip ripple generation
+        if (this.gameObject.CompareTag("IgnoreRipple")) return;
 
-        // Get other rigidbody
+        Debug.Log("Collision detected on " + this.gameObject.name);
+
+
         Rigidbody otherRb = collision.rigidbody;
+        if (otherRb == null) return;
+
+        PhysicsInteractor otherInteractor = otherRb.GetComponent<PhysicsInteractor>();
+        if (otherInteractor == null) return;
+
+        // ripple cooldown per object
+        if ((Time.time - lastRippleTime < rippleCooldown) ||
+            (Time.time - otherInteractor.lastRippleTime < otherInteractor.rippleCooldown))
+        {
+            Debug.Log($"Ignoring collision due to cooldown. " +
+                      $"Self Δt={(Time.time - lastRippleTime):F2}s, " +
+                      $"Other Δt={(Time.time - otherInteractor.lastRippleTime):F2}s, " +
+                      $"Objects: {this.gameObject.name}, {otherInteractor.gameObject.name}");
+            return;
+        }
+
+        // both are ready, update both cooldowns
+        lastRippleTime = Time.time;
+        otherInteractor.lastRippleTime = Time.time;
 
         // Calculate effective mass
         float myMass = rb.mass;
-        float otherMass = otherRb != null ? otherRb.mass : myMass;
+        float otherMass = otherRb.mass;
         float effectiveMass = myMass * otherMass / (myMass + otherMass);
 
-        // Impact calculations
+        // Total impact energy
         float impactSpeed = collision.relativeVelocity.magnitude;
-        float impactEnergy = 0.5f * effectiveMass * impactSpeed * impactSpeed;
+        float totalImpactEnergy = 0.5f * effectiveMass * impactSpeed * impactSpeed;
 
-        if (impactEnergy < minEnergyThreshold) return;
+        if (totalImpactEnergy < minEnergyThreshold) return;
+
+        // Energy contribution per object
+        float myContribution = otherMass / (myMass + otherMass) * totalImpactEnergy;
+        float otherContribution = myMass / (myMass + otherMass) * totalImpactEnergy;
+
+        // Decide which object sends the ripple
+        float epsilon = 0.001f * totalImpactEnergy; // 0.1% tolerance
+        bool nearlyEqual = Mathf.Abs(myContribution - otherContribution) < epsilon;
+
+        bool isPrimary;
+        if (nearlyEqual)
+        {
+            // Deterministic fallback
+            isPrimary = this.GetInstanceID() < otherRb.GetInstanceID();
+        }
+        else
+        {
+            // Energy-based decision
+            isPrimary = myContribution > otherContribution;
+        }
+
+        if (!isPrimary) return;
+
+
+        MaterialType primaryMaterial = materialType;
+        MaterialType secondaryMaterial = otherInteractor.materialType;
 
         // Contact info
         ContactPoint contact = collision.contacts[0];
         Vector3 contactPoint = contact.point;
         Vector3 contactNormal = contact.normal;
 
-        // Contact radius
+        // Contact radius (rough heuristic)
         Collider col = collision.collider;
         float contactRadius = col switch
         {
@@ -79,27 +119,17 @@ public class PhysicsInteractor : MonoBehaviour
         float distanceToListener = Camera.main != null ?
             Vector3.Distance(contactPoint, Camera.main.transform.position) : 10f;
 
-        Debug.Log($"Collision with impactEnergy={impactEnergy} by object={this.gameObject.name}");
-
-        // Send to interpreter
+        // Send to interpreter (ripple + both sounds)
         InteractionInterpreter.Instance.ProcessDiscreteCollision(
             position: contactPoint,
-            impactEnergy: impactEnergy,
+            impactEnergy: totalImpactEnergy,
             slipSpeed: slipSpeed,
             spinSpeed: spinSpeed,
             contactRadius: contactRadius,
             bounciness: bounciness,
-            material: materialType,
+            primaryMaterial: primaryMaterial,
+            secondaryMaterialForAudio: secondaryMaterial,
             distanceToListener: distanceToListener
         );
-    }
-
-    void Update()
-    {
-
-        // float speed = rb.linearVelocity.magnitude;
-        // if (speed < minContinuousVelocity) return;
-
-        // Continuous interaction handling here if needed
     }
 }

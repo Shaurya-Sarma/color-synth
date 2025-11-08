@@ -108,26 +108,26 @@ void SampleRipples_float(
         float dist = length(offset);
         float angle = atan2(offset.y, offset.x);
         
-       // --- Noise layering for complex edge breakup ---
+        // noise coordinates
         float2 dir = float2(cos(angle), sin(angle));
-        float2 coord = dir * dist * 3.0;
+        float2 coord = dir * dist * noiseScale; // 3.0 works as decent default
 
         // Two noise layers: large smooth + fine detail
         float n1 = warpyNoise(coord * 1.5 + time * 0.1, time);
         float n2 = warpyNoise(coord * 8.0 - time * 0.3, time);
-        float n = n1 * 0.6 + n2 * 0.4;
+        float n = n1 * 0.6 + n2 * 0.4; // combine layers
 
         // Modulate radius with noise
-        float perturbedRadius = radius + (n - 0.5) * .32;
+        float perturbedRadius = radius + (n - 0.5) * noiseStrength;
 
-        // --- Edge shaping ---
+        // calculate fade based on distance from ripple center
         float fade = 1.0 - smoothstep(perturbedRadius, perturbedRadius + fadeWidth * 0.5, dist);
-        fade = pow(fade, 1.6); // sharpen contrast
 
-        // --- Glow falloff ---
-        float glowDist = abs(dist - perturbedRadius);     // distance from ripple edge
-        float glow = exp(-glowDist * 15.0);               // exponential falloff
-        glow *= fade * 1.5;                               // tie to ripple strength
+        // add glow at ripple edge
+        float glowStrength = 16.0;
+        float glowDist = abs(dist - perturbedRadius); // distance from ripple edge
+        float glow = exp(-glowDist * glowStrength); // 1 means brightest at edge, falls off quickly
+        glow *= fade * 1.5; // make glow exist where ripple is visible                               
         
         // Add fadeout as ripple approaches maxDistance (fade out starting at 80% of maxDistance)
         float fadeoutStart = maxDistance * 0.8;
@@ -135,12 +135,14 @@ void SampleRipples_float(
                                                                              // until maxDistance is reached -> then ageFade = 0
         
         fade *= ageFade; // will be 0 when ageFade is 0 (i.e. ripple fully faded out)
-        glow *= ageFade;
-         
+        glow *= ageFade; // also fade glow with age
+                         //* interesting effect when we remove this line -> ripple edge line persists
+                         //* when the ripple fades out
+
         // fade for most pixels will be really small, so only accumulate if significant
         if (fade > 0.001)
         {
-            float3 glowColor = rippleColor * glow;        // brighter, emissive edge
+            float3 glowColor = rippleColor * glow;        
             finalColor += rippleColor * fade + glowColor; // add both layers
             finalAlpha += fade + glow * 0.5;
         }

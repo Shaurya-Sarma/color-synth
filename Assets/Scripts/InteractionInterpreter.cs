@@ -96,11 +96,12 @@ public class InteractionInterpreter : MonoBehaviour
       float spinSpeed,
       float contactRadius,
       float bounciness,
-      MaterialType material,
+      MaterialType primaryMaterial,
+    MaterialType secondaryMaterialForAudio,
       float distanceToListener
   )
     {
-        InteractionClipSO iclip = SelectClip(material);
+        InteractionClipSO iclip = SelectClip(primaryMaterial);
         if (iclip == null) return;
 
         // Normalize impact energy
@@ -120,8 +121,8 @@ public class InteractionInterpreter : MonoBehaviour
         // Estimate timbre for ripple noise scale (rough heuristic by material type) 
         /// have more timber (more jagged-glassy) equal to more noisy ripples 
         //(e.g., wood = smoother ripples, glass = more noisy ripples)
-        float timbre = EstimateTimbre(material, slipSpeed, spinSpeed);
-        float timbreNoiseScale = Mathf.Lerp(2f, 4f, timbre);
+        float timbre = EstimateTimbre(primaryMaterial, slipSpeed, spinSpeed);
+        float timbreNoiseScale = Mathf.Lerp(2.5f, 3.5f, timbre);
 
         // Construct ripple event
         Color color = frequencyToColor.evaluate(colorPitch);
@@ -133,11 +134,18 @@ public class InteractionInterpreter : MonoBehaviour
 
         // Emit to SoundToColorManager        
         SoundToColorManager.Instance.EmitRipple(ripple);
+
         // Call AudioManager to play sound
         AudioManager.Instance.PlayClip(iclip.clip, position, volume, audioPitch);
+        InteractionClipSO secondaryClip = SelectClip(secondaryMaterialForAudio);
+        if (secondaryClip != null)
+        {
+            // Play secondary material sound at lower volume to layer
+            AudioManager.Instance.PlayClip(secondaryClip.clip, position, volume * 0.5f, audioPitch);
+        }
 
         Debug.Log("Processed discrete collision: " +
-            $"Material={material}, Energy={impactEnergy:F2}, Volume={volume:F2}, Pitch={audioPitch:F2}, " +
+            $"PrimaryMaterial={primaryMaterial}, SecondaryMaterialForAudio={secondaryMaterialForAudio}, Energy={impactEnergy:F2}, Volume={volume:F2}, Pitch={audioPitch:F2}, " +
             $"Timbre={timbreNoiseScale:F2}, RippleSpeed={speed:F2}, MaxDist={maxDist:F2}");
     }
 
