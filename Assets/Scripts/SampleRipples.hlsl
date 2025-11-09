@@ -104,13 +104,15 @@ void SampleRipples_float(
         radius = min(radius, maxDistance); // clamp to maxDistance
 
         // Calculate distance and angle from ripple center
-        float2 offset = worldPos.xz - ripplePos.xz;
-        float dist = length(offset);
-        float angle = atan2(offset.y, offset.x);
-        
-        // noise coordinates
+        float3 offset3D = worldPos - ripplePos;
+        float dist = length(offset3D);
+
+      // XZ plane for horizontal noise
+        float2 offsetXZ = offset3D.xz;
+        float distXZ = length(offsetXZ); // horizontal distance for noise
+        float angle = atan2(offsetXZ.y, offsetXZ.x);
         float2 dir = float2(cos(angle), sin(angle));
-        float2 coord = dir * dist * noiseScale; // 3.0 works as decent default
+        float2 coord = dir * distXZ * noiseScale; // only horizontal
 
         // Two noise layers: large smooth + fine detail
         float n1 = warpyNoise(coord * 1.5 + time * 0.1, time);
@@ -128,11 +130,12 @@ void SampleRipples_float(
         float glowDist = abs(dist - perturbedRadius); // distance from ripple edge
         float glow = exp(-glowDist * glowStrength); // 1 means brightest at edge, falls off quickly
         glow *= fade * 1.5; // make glow exist where ripple is visible                               
-        
-        // Add fadeout as ripple approaches maxDistance (fade out starting at 80% of maxDistance)
-        float fadeoutStart = maxDistance * 0.8;
-        float ageFade = 1.0 - smoothstep(fadeoutStart, maxDistance, radius); // when radius reaches fadeOutStart, start fading
-                                                                             // until maxDistance is reached -> then ageFade = 0
+
+        // fade out ripple as it ages
+        // could be interesting to explore after-image effects
+        // could do based on % reach of max distance, earlier code commits have examples
+        float fadeDuration = (maxDistance / speed) * 0.3; // fade lasts 30% of ripple lifetime
+        float ageFade = saturate(1.0 - (elapsed - (maxDistance / speed) * 0.8) / fadeDuration);
         
         fade *= ageFade; // will be 0 when ageFade is 0 (i.e. ripple fully faded out)
         glow *= ageFade; // also fade glow with age

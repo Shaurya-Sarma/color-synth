@@ -44,20 +44,15 @@ public class PhysicsInteractor : MonoBehaviour
         PhysicsInteractor otherInteractor = otherRb.GetComponent<PhysicsInteractor>();
         if (otherInteractor == null) return;
 
-        // ripple cooldown per object
-        if ((Time.time - lastRippleTime < rippleCooldown) ||
-            (Time.time - otherInteractor.lastRippleTime < otherInteractor.rippleCooldown))
+
+        //! Cooldown is broken need to fix, should i be checking both objects? but i did that and had issue 
+        // --- Cooldown check (only for primary object) ---
+        if (Time.time - lastRippleTime < rippleCooldown)
         {
-            Debug.Log($"Ignoring collision due to cooldown. " +
-                      $"Self Δt={(Time.time - lastRippleTime):F2}s, " +
-                      $"Other Δt={(Time.time - otherInteractor.lastRippleTime):F2}s, " +
-                      $"Objects: {this.gameObject.name}, {otherInteractor.gameObject.name}");
+            Debug.Log($"Ignoring collision due to cooldown. Δt={Time.time - lastRippleTime:F2}s, Object={gameObject.name}");
             return;
         }
-
-        // both are ready, update both cooldowns
-        lastRippleTime = Time.time;
-        otherInteractor.lastRippleTime = Time.time;
+        lastRippleTime = Time.time; // update cooldown only for primary
 
         // Calculate effective mass
         float myMass = rb.mass;
