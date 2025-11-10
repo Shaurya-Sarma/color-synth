@@ -136,7 +136,7 @@ void SampleRipples_float(
         // could do based on % reach of max distance, earlier code commits have examples
         float fadeDuration = (maxDistance / speed) * 0.3; // fade lasts 30% of ripple lifetime
         float ageFade = saturate(1.0 - (elapsed - (maxDistance / speed) * 0.8) / fadeDuration);
-        
+            
         fade *= ageFade; // will be 0 when ageFade is 0 (i.e. ripple fully faded out)
         glow *= ageFade; // also fade glow with age
                          //* interesting effect when we remove this line -> ripple edge line persists

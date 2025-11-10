@@ -94,23 +94,8 @@ public class PhysicsInteractor : MonoBehaviour
         // Contact info
         ContactPoint contact = collision.contacts[0];
         Vector3 contactPoint = contact.point;
-        Vector3 contactNormal = contact.normal;
-
-        // Contact radius (rough heuristic)
-        Collider col = collision.collider;
-        float contactRadius = col switch
-        {
-            SphereCollider sphere => sphere.radius,
-            BoxCollider box => box.size.magnitude * 0.25f,
-            CapsuleCollider capsule => capsule.radius,
-            _ => 0.1f
-        };
 
         // Physics details
-        float bounciness = col.material != null ? col.material.bounciness : 0f;
-        Vector3 tangentialVel = Vector3.ProjectOnPlane(rb.linearVelocity, contactNormal);
-        float slipSpeed = tangentialVel.magnitude;
-        float spinSpeed = rb.angularVelocity.magnitude;
         float distanceToListener = Camera.main != null ?
             Vector3.Distance(contactPoint, Camera.main.transform.position) : 10f;
 
@@ -118,10 +103,6 @@ public class PhysicsInteractor : MonoBehaviour
         InteractionInterpreter.Instance.ProcessDiscreteCollision(
             position: contactPoint,
             impactEnergy: totalImpactEnergy,
-            slipSpeed: slipSpeed,
-            spinSpeed: spinSpeed,
-            contactRadius: contactRadius,
-            bounciness: bounciness,
             primaryMaterial: primaryMaterial,
             secondaryMaterialForAudio: secondaryMaterial,
             distanceToListener: distanceToListener

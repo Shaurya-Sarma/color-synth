@@ -14,11 +14,11 @@ MonoBehaviour:
   m_EditorClassIdentifier: Unity.RenderPipelines.Universal.Runtime::UnityEngine.Rendering.Universal.ColorAdjustments
   active: 1
   postExposure:
-    m_OverrideState: 0
-    m_Value: 0.29
+    m_OverrideState: 1
+    m_Value: 0.1
   contrast:
-    m_OverrideState: 0
-    m_Value: 10
+    m_OverrideState: 1
+    m_Value: 8
   colorFilter:
     m_OverrideState: 0
     m_Value: {r: 1, g: 1, b: 1, a: 1}
@@ -43,7 +43,7 @@ MonoBehaviour:
   active: 0
   mode:
     m_OverrideState: 1
-    m_Value: 1
+    m_Value: 0
   gaussianStart:
     m_OverrideState: 1
     m_Value: 10
@@ -122,6 +122,7 @@ MonoBehaviour:
   - {fileID: -4887916647222594968}
   - {fileID: -7563257575878648929}
   - {fileID: -5792912873446126867}
+  - {fileID: 7835487270790176259}
 --- !u!114 &3947908418710876404
 MonoBehaviour:
   m_ObjectHideFlags: 3
@@ -221,7 +222,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 5485954d14dfb9a4c8ead8edb0ded5b1, type: 3}
   m_Name: LiftGammaGain
   m_EditorClassIdentifier: Unity.RenderPipelines.Universal.Runtime::UnityEngine.Rendering.Universal.LiftGammaGain
-  active: 1
+  active: 0
   lift:
     m_OverrideState: 0
     m_Value: {x: 1, y: 1, z: 1, w: 0.052452747}
@@ -229,8 +230,33 @@ MonoBehaviour:
     m_OverrideState: 0
     m_Value: {x: 1, y: 1, z: 1, w: 0.555384}
   gain:
+    m_OverrideState: 1
+    m_Value: {x: 1, y: 1, z: 1, w: 0.12805645}
+--- !u!114 &7835487270790176259
+MonoBehaviour:
+  m_ObjectHideFlags: 3
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 29fa0085f50d5e54f8144f766051a691, type: 3}
+  m_Name: FilmGrain
+  m_EditorClassIdentifier: Unity.RenderPipelines.Universal.Runtime::UnityEngine.Rendering.Universal.FilmGrain
+  active: 1
+  type:
+    m_OverrideState: 1
+    m_Value: 1
+  intensity:
+    m_OverrideState: 1
+    m_Value: 0.899
+  response:
+    m_OverrideState: 1
+    m_Value: 1
+  texture:
     m_OverrideState: 0
-    m_Value: {x: 1, y: 1, z: 1, w: 0.27683055}
+    m_Value: {fileID: 0}
 --- !u!114 &8333537521775972491
 MonoBehaviour:
   m_ObjectHideFlags: 3

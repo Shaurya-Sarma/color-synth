@@ -90,16 +90,12 @@ public class InteractionInterpreter : MonoBehaviour
     // DISCRETE COLLISIONS
     // -----------------------
     public void ProcessDiscreteCollision(
-      Vector3 position,
-      float impactEnergy,
-      float slipSpeed,
-      float spinSpeed,
-      float contactRadius,
-      float bounciness,
-      MaterialType primaryMaterial,
-    MaterialType secondaryMaterialForAudio,
-      float distanceToListener
-  )
+        Vector3 position,
+        float impactEnergy,
+        MaterialType primaryMaterial,
+        MaterialType secondaryMaterialForAudio,
+        float distanceToListener
+    )
     {
         InteractionClipSO iclip = SelectClip(primaryMaterial);
         if (iclip == null) return;
@@ -110,7 +106,7 @@ public class InteractionInterpreter : MonoBehaviour
         // Volume scales with impact energy & distance
         float volume = Mathf.Lerp(minVolume, maxVolume, normalizedEnergy);
         // scale volume based on distance to listener (1 = nearby, 0 = far)
-        volume *= Mathf.Clamp01(1f - (distanceToListener / 10f));
+        volume *= Mathf.Clamp01(1f - (distanceToListener / 20f));
         if (volume < 0.05f) return; // too quiet → ignore
 
         // Slight pitch variation based on physics        
@@ -121,7 +117,7 @@ public class InteractionInterpreter : MonoBehaviour
         // Estimate timbre for ripple noise scale (rough heuristic by material type) 
         /// have more timber (more jagged-glassy) equal to more noisy ripples 
         //(e.g., wood = smoother ripples, glass = more noisy ripples)
-        float timbre = EstimateTimbre(primaryMaterial, slipSpeed, spinSpeed);
+        float timbre = EstimateTimbre(primaryMaterial);
         float timbreNoiseScale = Mathf.Lerp(2.5f, 3.5f, timbre);
 
         // Construct ripple event
@@ -141,7 +137,7 @@ public class InteractionInterpreter : MonoBehaviour
         if (secondaryClip != null)
         {
             // Play secondary material sound at lower volume to layer
-            AudioManager.Instance.PlayClip(secondaryClip.clip, position, volume * 0.5f, audioPitch);
+            AudioManager.Instance.PlayClip(secondaryClip.clip, position, volume * 0.3f, audioPitch);
         }
 
         Debug.Log("Processed discrete collision: " +
@@ -181,10 +177,8 @@ public class InteractionInterpreter : MonoBehaviour
         // AudioManager.Instance.PlayClip(iclip.clip, position, volume, pitch);
     }
 
-    // -----------------------
-    // TIMBRE HEURISTIC
-    // -----------------------
-    private float EstimateTimbre(MaterialType material, float velocity, float spinSpeed)
+    // Rough heuristic to estimate timbre based on material
+    private float EstimateTimbre(MaterialType material)
     {
         // rough example: metallic/glass = jagged (high noise), wood = smoother
         float baseTimbre = material switch
