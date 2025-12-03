@@ -20,10 +20,11 @@ public struct RippleEvent
     public float speed;
     public float maxDistance;
     public float fadeWidth;
-    public float timbre;
+    public float noiseScale;
+    public float noiseStrength;
     public bool continuous;
 
-    public RippleEvent(Vector3 position, Color color, float speed, float maxDistance, float fadeWidth, float timbre, bool continuous = false)
+    public RippleEvent(Vector3 position, Color color, float speed, float maxDistance, float fadeWidth, float noiseScale, float noiseStrength, bool continuous = false)
     {
         this.position = position;
         this.color = color;
@@ -31,7 +32,8 @@ public struct RippleEvent
         this.speed = speed;
         this.maxDistance = maxDistance;
         this.fadeWidth = fadeWidth;
-        this.timbre = timbre;
+        this.noiseScale = noiseScale;
+        this.noiseStrength = noiseStrength;
         this.continuous = continuous;
     }
 

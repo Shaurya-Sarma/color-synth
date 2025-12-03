@@ -118,7 +118,11 @@ public class InteractionInterpreter : MonoBehaviour
         /// have more timber (more jagged-glassy) equal to more noisy ripples 
         //(e.g., wood = smoother ripples, glass = more noisy ripples)
         float timbre = EstimateTimbre(primaryMaterial);
-        float timbreNoiseScale = Mathf.Lerp(2.5f, 3.5f, timbre);
+
+        // Frequency: how many waves
+        float timbreNoiseScale = Mathf.Lerp(0.7f, 2.8f, timbre);
+        // Amplitude: how pronounced the waves are
+        float timbreNoiseStrength = Mathf.Lerp(0.2f, 0.4f, timbre);
 
         // Construct ripple event
         Color color = frequencyToColor.evaluate(colorPitch);
@@ -126,7 +130,7 @@ public class InteractionInterpreter : MonoBehaviour
         float maxDist = Mathf.Lerp(minRippleRadius, maxRippleRadius, normalizedEnergy);
         float fadeWidth = 0f;
 
-        RippleEvent ripple = new RippleEvent(position, color, speed, maxDist, fadeWidth, timbreNoiseScale, continuous: false);
+        RippleEvent ripple = new RippleEvent(position, color, speed, maxDist, fadeWidth, timbreNoiseScale, timbreNoiseStrength, continuous: false);
 
         // Emit to SoundToColorManager        
         SoundToColorManager.Instance.EmitRipple(ripple);

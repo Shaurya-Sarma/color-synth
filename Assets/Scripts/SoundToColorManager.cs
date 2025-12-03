@@ -100,11 +100,11 @@ public class SoundToColorManager : MonoBehaviour
 
         // RippleTimeTex: startTime, maxDist, fadeWidth, timbre
         rippleTimeTex.SetPixel(index, 0,
-            new Color(ripple.startTime, ripple.maxDistance, ripple.fadeWidth, ripple.timbre));
+            new Color(ripple.startTime, ripple.maxDistance, ripple.fadeWidth, ripple.noiseScale));
 
-        // RippleColorTex: color RGB
+        // RippleColorTex: color RGB, A = noiseStrength
         rippleColorTex.SetPixel(index, 0,
-            new Color(ripple.color.r, ripple.color.g, ripple.color.b, 1));
+            new Color(ripple.color.r, ripple.color.g, ripple.color.b, ripple.noiseStrength));
 
         // finished changing pixels on CPU side -> send to GPU
         rippleDataTex.Apply(false, false);

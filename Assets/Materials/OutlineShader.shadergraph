@@ -1685,8 +1685,8 @@
     "m_ObjectId": "1022056da81c43a6b1da7b81f993f068",
     "m_Title": "Edge Detection Based on Normals",
     "m_Position": {
-        "x": -1891.4285888671875,
-        "y": -88.5714111328125
+        "x": -1890.5,
+        "y": -87.0
     }
 }
 
@@ -3436,8 +3436,8 @@
     "m_ObjectId": "68ececd6bf2a425ab1b2e0f7754f6a67",
     "m_Title": "Edge Detection Based on Color",
     "m_Position": {
-        "x": -1901.71435546875,
-        "y": 1018.8570556640625
+        "x": -1901.0,
+        "y": 1020.5
     }
 }
 
