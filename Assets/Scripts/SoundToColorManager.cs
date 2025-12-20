@@ -72,6 +72,7 @@ public class SoundToColorManager : MonoBehaviour
     public void EmitRipple(RippleEvent ripple)
     {
         // Debug.Log("Active Ripples: " + activeRipples.Count);
+        Debug.Log("Emitting ripple at " + ripple.position + " with color " + ripple.color);
 
         // Keep within limit
         if (activeRipples.Count >= maxRipples)
